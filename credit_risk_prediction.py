@@ -181,7 +181,7 @@ models = {
 
 results_df = evaluate_and_plot_models(models, X_train, X_test, y_train, y_test)
 
-# ✅ Phase 6: Save the Best Model (based on AUC)
+# Phase 6: Save the Best Model (based on AUC)
 best_model_name = results_df.sort_values(by="AUC", ascending=False).iloc[0]['Model']
 best_model_accuracy = results_df.sort_values(by="AUC", ascending=False).iloc[0]['Accuracy']
 
@@ -192,7 +192,7 @@ best_model = models[best_model_name]
 joblib.dump(best_model, 'model/model.pkl')
 joblib.dump(scaler, 'model/scaler.pkl')
 
-# 🔍 Phase 7: Feature Importance and SHAP Analysis
+# Phase 7: Feature Importance and SHAP Analysis
 if hasattr(best_model, 'feature_importances_'):
     importances = best_model.feature_importances_
     indices = np.argsort(importances)[::-1]
