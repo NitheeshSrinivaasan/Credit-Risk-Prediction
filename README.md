@@ -40,7 +40,7 @@ Target variable: **Risk** (Good/Bad credit risk)
 
 3. **Model Training and Evaluation**:
    - Tested multiple algorithms:
-     - **Logistic Regression**
+     - **Random Forest**
      - **XGBoost Classifier**
      - **K Nearest Neighbours**
      - **Decision Tree Classifier**
