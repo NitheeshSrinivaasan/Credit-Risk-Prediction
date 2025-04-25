@@ -1,16 +1,16 @@
-
 # Phase 1: Load Data
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve, accuracy_score, precision_score, recall_score, f1_score
+from sklearn.feature_selection import mutual_info_classif, RFE
 import xgboost as xgb
 import joblib
 import shap
@@ -115,12 +115,58 @@ y = df['Risk'].apply(lambda x: 1 if x == 'good' else 0)
 
 joblib.dump(X.columns.tolist(), "model/features.pkl")
 
-
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
+# Phase 3.1: Correlation, Mutual Information, RFE
+# Correlation
+correlation_matrix = df.select_dtypes(include=['number']).corr()
+plt.figure(figsize=(10, 8))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm')
+plt.title("Correlation Matrix")
+plt.tight_layout()
+plt.savefig("outputs/correlation_matrix.png")
+plt.close()
+
+# Mutual Information
+mi_scores = mutual_info_classif(X_scaled, y, discrete_features=False)
+mi_series = pd.Series(mi_scores, index=X.columns).sort_values(ascending=False)
+plt.figure(figsize=(10, 6))
+mi_series.plot(kind='bar')
+plt.title("Mutual Information Scores")
+plt.tight_layout()
+plt.savefig("outputs/mutual_info.png")
+plt.close()
+
+# Recursive Feature Elimination
+rfe_selector = RFE(estimator=RandomForestClassifier(), n_features_to_select=5)
+rfe_selector = rfe_selector.fit(X_scaled, y)
+selected_features = X.columns[rfe_selector.support_]
+print("Top 5 Features from RFE:", list(selected_features))
+
 # Phase 4: Train/Test Split
 X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+
+# Phase 5: Hyperparameter Tuning for Random Forest
+rf_param_grid = {
+    'n_estimators': [100, 200],
+    'max_depth': [None, 10, 20],
+    'min_samples_split': [2, 5]
+}
+
+rf = RandomForestClassifier(random_state=42)
+rf_grid = GridSearchCV(estimator=rf, param_grid=rf_param_grid, cv=5, scoring='f1', n_jobs=-1, verbose=1)
+rf_grid.fit(X_train, y_train)
+best_rf = rf_grid.best_estimator_
+
+# Replace the original model in the dictionary with the best tuned one
+models = {
+    "Random Forest": best_rf,
+    "XGBoost": xgb.XGBClassifier(verbosity=0, eval_metric='logloss'),
+    "K-Nearest Neighbors": KNeighborsClassifier(),
+    "Decision Tree": DecisionTreeClassifier(random_state=42),
+    "Support Vector Machine": SVC(probability=True)
+}
 
 # Function to evaluate and plot models
 def evaluate_and_plot_models(models, X_train, X_test, y_train, y_test, save_path="outputs/roc_comparison.png"):
@@ -170,18 +216,10 @@ def evaluate_and_plot_models(models, X_train, X_test, y_train, y_test, save_path
     print(results_df.sort_values(by="AUC", ascending=False))
     return results_df
 
-# Phase 5: Model Training, Evaluation & Comparison
-models = {
-    "Random Forest": RandomForestClassifier(random_state=42),
-    "XGBoost": xgb.XGBClassifier(verbosity=0, eval_metric='logloss'),
-    "K-Nearest Neighbors": KNeighborsClassifier(),
-    "Decision Tree": DecisionTreeClassifier(random_state=42),
-    "Support Vector Machine": SVC(probability=True)
-}
-
+# Phase 6: Train, Evaluate, Compare
 results_df = evaluate_and_plot_models(models, X_train, X_test, y_train, y_test)
 
-# Phase 6: Save the Best Model (based on AUC)
+# Phase 7: Save Best Model
 best_model_name = results_df.sort_values(by="AUC", ascending=False).iloc[0]['Model']
 best_model_accuracy = results_df.sort_values(by="AUC", ascending=False).iloc[0]['Accuracy']
 
@@ -192,7 +230,7 @@ best_model = models[best_model_name]
 joblib.dump(best_model, 'model/model.pkl')
 joblib.dump(scaler, 'model/scaler.pkl')
 
-# Phase 7: Feature Importance and SHAP Analysis
+# Phase 8: Feature Importance and SHAP
 if hasattr(best_model, 'feature_importances_'):
     importances = best_model.feature_importances_
     indices = np.argsort(importances)[::-1]
